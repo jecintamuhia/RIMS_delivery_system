@@ -1,0 +1,75 @@
+[project]
+name = "rims-delivery-api"
+version = "1.0.0"
+description = "RIMs Hardware & Supplies - delivery pricing API"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "aiosqlite>=0.20",
+    "alembic>=1.13",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.5",
+    "httpx>=0.27",
+    "argon2-cffi>=23.1",
+    "itsdangerous>=2.2",
+]
+
+[project.optional-dependencies]
+postgres = ["asyncpg>=0.30"]
+redis = ["redis>=5.0"]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# smoke_pricing.py is also a standalone runner (python tests/smoke_pricing.py), so pytest collects
+# the same checks from it rather than maintaining a duplicate suite.
+python_files = ["test_*.py", "smoke_*.py"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = ["error::DeprecationWarning:app.*"]
+addopts = "-q --strict-markers"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "RUF", "ASYNC"]
+ignore = [
+    "B008",   # FastAPI Depends() in defaults is the framework idiom
+    "RUF001", # ambiguous unicode in strings
+    "RUF002",
+    "RUF003",
+    "SIM108", # ternary rewrites hurt readability of pricing guards
+    "UP042",  # (str, Enum) kept deliberately: StrEnum would change str(member) from
+              # "StepKey.LOCATION" to "location", altering log output and stored JSON.
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+"alembic/versions/*" = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+strict = true
+warn_unreachable = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+no_implicit_reexport = false
+exclude = ["alembic/", "\\.venv"]
+
+[[tool.mypy.overrides]]
+module = ["argon2.*", "redis.*", "alembic.*"]
+ignore_missing_imports = true

@@ -1,0 +1,27 @@
+# Secrets and per-machine configuration
+.env
+.env.*
+!.env.example
+backend/.env
+rims-delivery-ui/.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+backend/*.db
+backend/*.db-*
+
+# JavaScript build and dependency output
+node_modules/
+rims-delivery-ui/node_modules/
+rims-delivery-ui/dist/
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
