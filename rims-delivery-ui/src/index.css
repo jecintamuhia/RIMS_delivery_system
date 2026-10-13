@@ -233,16 +233,6 @@
     radial-gradient(64% 52% at 50% 40%, rgb(var(--brand) / 0.38), transparent 62%),
     linear-gradient(160deg, rgb(5 9 20), rgb(11 19 38) 58%, rgb(3 6 14));
 }
-.intro-plate--night {
-  background:
-    radial-gradient(78% 58% at 76% 22%, rgb(var(--brand) / 0.44), transparent 58%),
-    linear-gradient(170deg, rgb(3 6 15), rgb(10 17 34) 54%, rgb(2 5 12));
-}
-.intro-plate--interior {
-  background:
-    radial-gradient(85% 62% at 28% 30%, rgb(var(--brand) / 0.4), transparent 60%),
-    linear-gradient(150deg, rgb(7 11 23), rgb(17 26 46) 55%, rgb(4 7 16));
-}
 .intro-plate::after {
   content: "";
   position: absolute;
@@ -412,66 +402,7 @@
   font-size: clamp(0.95rem, 1.6vw, 1.15rem);
   color: rgb(255 255 255 / 0.72);
 }
-.intro-ready__device {
-  width: min(700px, 62vw);
-  pointer-events: auto;
-}
-.intro-laptop {
-  position: relative;
-  width: 100%;
-}
-.intro-laptop__lid {
-  border-radius: 15px;
-  padding: 11px 11px 13px;
-  background: linear-gradient(158deg, rgb(40 46 62), rgb(13 17 29));
-  box-shadow:
-    0 44px 90px -34px rgb(0 0 0 / 0.85),
-    inset 0 1px 0 rgb(255 255 255 / 0.12);
-}
-.intro-laptop__screen {
-  position: relative;
-  overflow: hidden;
-  border-radius: 6px;
-  background: rgb(6 10 20);
-  aspect-ratio: 16 / 10;
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.06);
-}
-.intro-laptop__base {
-  position: relative;
-  width: 106%;
-  height: 14px;
-  margin: 0 auto;
-  border-radius: 0 0 12px 12px;
-  background: linear-gradient(180deg, rgb(48 54 70), rgb(17 21 33));
-}
-.intro-laptop__base::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 0;
-  width: 92px;
-  height: 5px;
-  transform: translateX(-50%);
-  border-radius: 0 0 6px 6px;
-  background: rgb(0 0 0 / 0.5);
-}
-.intro-laptop__search {
-  position: absolute;
-  left: 7%;
-  right: 7%;
-  top: 7%;
-  z-index: 5;
-}
-.intro-scan {
-  background: linear-gradient(
-    115deg,
-    transparent 40%,
-    rgb(255 255 255 / 0.09) 50%,
-    transparent 60%
-  );
-  background-size: 250% 100%;
-  animation: intro-scan 4.5s linear infinite;
-}
+
 
 /* Persistent call to action --------------------------------------------- */
 .intro-cta {
@@ -515,7 +446,7 @@
   color: rgb(255 255 255 / 0.6);
 }
 
-/* Closing morph: the device screen opens out into the calculator --------- */
+/* Closing morph: the CTA button expands out into the calculator ----------- */
 .intro-morph {
   position: fixed;
   z-index: 40;
@@ -577,14 +508,6 @@
   to {
     opacity: 1;
     transform: none;
-  }
-}
-@keyframes intro-scan {
-  from {
-    background-position: 200% 0;
-  }
-  to {
-    background-position: -100% 0;
   }
 }
 

@@ -1,25 +1,23 @@
 # RIMs brand assets for the cinematic opening
 
-The full-screen introduction is built around the official RIMs logo and three
+The full-screen introduction is built around the official RIMs logo and six
 genuine photographs of the RIMs shop on Kenyatta Avenue, Naivasha. Drop the
 files into this folder with the exact names below and the opening picks them
 up automatically. Until an asset is present, the affected scene degrades to a
 branded plate and the delivery calculator remains fully reachable.
 
-## Required assets
+## Assets
 
-| File (drop into `public/brand/`) | Content | Recommended source |
+| File (drop into `public/brand/`) | Content | Status |
 | --- | --- | --- |
-| `rims-logo.svg` | Official RIMs logo, transparent background | Vector SVG preferred; a high-resolution PNG (≥ 1000px wide, transparent) also works |
-| `rims-logo.png` | Same logo as a fallback (only needed if no SVG) | PNG-24, transparent, ≥ 1000px wide |
-| `store-day.jpg` | The shop exterior in daylight | 2560×1440 (16:9) or wider, < 400 KB after optimisation |
-| `store-night.jpg` | The same exterior at night | 2560×1440 (16:9) or wider, < 400 KB |
-| `store-interior.jpg` | The shop interior with shelving/product | 2560×1440 (16:9) or wider, < 400 KB |
+| `rims-logo.png` | Official RIMs logo (transparent PNG) | supplied |
+| `rims-logo.svg` | Optional vector version of the logo | optional |
+| `rims-1.jpg` … `rims-6.jpg` | The six shop photographs used in the opening sequence | supplied |
 
-The three photographs are used as full-bleed backgrounds with a slow zoom
-(Ken Burns) and a cinematic darkening veil, so keep the focal point central or
-centre-right. Faces and any customers should not be identifiable without
-consent. Anything lighter can be downsampled to 1600px wide.
+The six photographs are shown full-bleed in order with a slow zoom (Ken Burns),
+a cinematic darkening veil and a short caption, then hand over to the device
+composition and the `START YOUR DELIVERY` action. Faces and any customers
+should not be identifiable without consent.
 
 ## Where these are referenced
 

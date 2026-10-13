@@ -19,14 +19,11 @@ import {
   STORE_SCENES,
   preloadImage,
 } from "./assets";
-import { LaptopScreen } from "./LaptopScreen";
 import { usePrefersReducedMotion } from "./useIntro";
 
 interface Props {
-
   onDone: (location?: GeoLocation) => void;
 }
-
 
 function IntroLogo({
   className,
@@ -62,50 +59,32 @@ function IntroLogo({
   );
 }
 
-function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(
-    () => typeof window !== "undefined" && window.matchMedia(query).matches,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia(query);
-    const on = () => setMatches(mq.matches);
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, [query]);
-  return matches;
-}
-
 export function CinematicIntro({ onDone }: Props) {
   const reduced = usePrefersReducedMotion();
-  const isDesktop = useMediaQuery("(min-width: 768px)");
 
-  const [step, setStep] = useState(0); // 0 logo reveal · 1..n store scenes, looping forever
+  const [sceneId, setSceneId] = useState(0); // 0 = logo reveal · then photos loop forever
   const [failed, setFailed] = useState<Record<string, boolean>>({});
   const [closing, setClosing] = useState(false);
   const [morph, setMorph] = useState<DOMRect | null>(null);
   const [morphFull, setMorphFull] = useState(false);
   const [faded, setFaded] = useState(false);
 
-  const screenRef = useRef<HTMLDivElement>(null);
   const ctaRef = useRef<HTMLButtonElement>(null);
   const timers = useRef<number[]>([]);
   const closingRef = useRef(false);
 
   useEffect(() => {
     if (reduced || closing) return;
-    const dwell = step === 0 ? LOGO_DWELL_MS : SCENE_DWELL_MS;
-    const t = window.setTimeout(
-      () => setStep((s) => (s === 0 || s >= STORE_SCENES.length ? 1 : s + 1)),
-      dwell,
-    );
+    const dwell = sceneId === 0 ? LOGO_DWELL_MS : SCENE_DWELL_MS;
+    const t = window.setTimeout(() => setSceneId((s) => s + 1), dwell);
     return () => window.clearTimeout(t);
-  }, [step, reduced, closing]);
+  }, [sceneId, reduced, closing]);
 
   useEffect(() => {
     if (reduced) return;
-    const upcoming = STORE_SCENES[step];
-    if (upcoming) preloadImage(upcoming.src);
-  }, [step, reduced]);
+    const upcoming = STORE_SCENES[sceneId % STORE_SCENES.length];
+    preloadImage(upcoming.src);
+  }, [sceneId, reduced]);
 
   useEffect(() => {
     const previous = document.body.style.overflow;
@@ -132,7 +111,7 @@ export function CinematicIntro({ onDone }: Props) {
       closingRef.current = true;
       setClosing(true);
 
-      const rect = isDesktop ? screenRef.current?.getBoundingClientRect() : null;
+      const rect = ctaRef.current?.getBoundingClientRect();
       if (rect && rect.width > 0) {
         setMorph(rect);
         timers.current.push(window.setTimeout(() => setMorphFull(true), 20));
@@ -144,7 +123,7 @@ export function CinematicIntro({ onDone }: Props) {
         timers.current.push(window.setTimeout(() => onDone(location), 300));
       }
     },
-    [isDesktop, onDone],
+    [onDone],
   );
 
   useEffect(() => {
@@ -155,7 +134,8 @@ export function CinematicIntro({ onDone }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [finish]);
 
-  const activeScene = step >= 1 && step <= 3 ? STORE_SCENES[step - 1] : null;
+  const activeScene =
+    sceneId >= 1 ? STORE_SCENES[(sceneId - 1) % STORE_SCENES.length] : null;
 
   if (reduced) {
     return (
@@ -178,8 +158,7 @@ export function CinematicIntro({ onDone }: Props) {
         <div
           className={cn(
             "intro-scene intro-scene--logo",
-            step === 0 && "is-active",
-            step > 0 && "is-past",
+            sceneId === 0 && "is-active",
           )}
         >
           <div className="intro-plate intro-plate--logo" />
@@ -187,17 +166,13 @@ export function CinematicIntro({ onDone }: Props) {
 
         {STORE_SCENES.map((scene, i) => {
           const index = i + 1;
-          const mounted = step >= index - 1;
-          const isActive = step === index;
-          const isPast = step > index;
+          const mounted = sceneId >= index;
+          const isActive =
+            sceneId >= 1 && (sceneId - 1) % STORE_SCENES.length === i;
           return (
             <div
               key={scene.key}
-              className={cn(
-                "intro-scene",
-                isActive && "is-active",
-                isPast && "is-past",
-              )}
+              className={cn("intro-scene", isActive && "is-active")}
             >
               <div className={cn("intro-plate", `intro-plate--${scene.key}`)} />
               {mounted && !failed[scene.key] && (
@@ -218,21 +193,17 @@ export function CinematicIntro({ onDone }: Props) {
       </div>
 
       <div className="intro-chrome intro-topbar">
-        <div className={cn("intro-toplogo", step > 0 && "is-shown")}>
+        <div className={cn("intro-toplogo", sceneId > 0 && "is-shown")}>
           <IntroLogo className="h-6 w-auto" />
         </div>
-        <button
-          type="button"
-          className="intro-skip"
-          onClick={() => finish()}
-        >
+        <button type="button" className="intro-skip" onClick={() => finish()}>
           Skip intro
           <X className="h-3.5 w-3.5" aria-hidden />
         </button>
       </div>
 
       <div className="intro-content">
-        {step === 0 && (
+        {sceneId === 0 && (
           <div className="intro-lockup">
             <IntroLogo className="intro-lockup__logo h-16 w-auto sm:h-24" />
             <p className="intro-lockup__sub">Supplies &amp; Hardware</p>
@@ -240,24 +211,9 @@ export function CinematicIntro({ onDone }: Props) {
         )}
 
         {activeScene && (
-          <div key={activeScene.key} className="intro-caption">
+          <div key={`${activeScene.key}-${sceneId}`} className="intro-caption">
             <p className="intro-caption__eyebrow">{activeScene.eyebrow}</p>
             <p className="intro-caption__title">{activeScene.caption}</p>
-          </div>
-        )}
-
-        {step === 4 && (
-          <div className="intro-ready">
-            <div className="intro-ready__head">
-              <IntroLogo className="h-10 w-auto sm:h-12" />
-              <h1 className="intro-ready__brand">RIMs Supplies &amp; Hardware</h1>
-              <p className="intro-ready__tag">Your destination. Our delivery.</p>
-            </div>
-            {isDesktop && (
-              <div className="intro-ready__device">
-                <LaptopScreen onStart={finish} screenRef={screenRef} />
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -272,9 +228,7 @@ export function CinematicIntro({ onDone }: Props) {
           Start your delivery
           <ArrowRight className="h-4 w-4" aria-hidden />
         </button>
-        <span className="intro-cta__hint">
-          {step < 4 ? "Skip straight to the calculator" : "Enter your delivery location"}
-        </span>
+        <span className="intro-cta__hint">Open the delivery calculator</span>
       </div>
 
       {morph && (
@@ -322,7 +276,7 @@ function StaticIntro({
     >
       <div className="intro-stage" aria-hidden>
         <div className="intro-scene is-active">
-          <div className="intro-plate intro-plate--day" />
+          <div className="intro-plate" />
           <img
             className="intro-scene__img"
             src={STORE_SCENES[0].src}
