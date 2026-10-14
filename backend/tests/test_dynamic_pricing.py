@@ -17,6 +17,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
+import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.main import create_app
 from app.models import DynamicPricingVersion, PricingVersionStatus
+from app.providers.base import LatLng, ProviderError, RoutingResult
 from app.services.pricing import engine
 from app.services.pricing.models import AdjustmentKind, DynamicPricingConfig, PricingContext
 
@@ -126,6 +128,57 @@ def test_a_distance_quote_is_labelled_as_model_b() -> None:
     assert outcome.breakdown is not None
     assert outcome.breakdown.pricing_model.value == "distance_based"
     assert outcome.breakdown.version_id == "cfg1"
+
+
+def test_the_payable_amount_is_rounded_to_the_nearest_whole_shilling() -> None:
+    """12.5 km x 55 = 687.50, which a customer pays as 688 KES."""
+    outcome = engine.price_by_distance(_context("12.5"), _config())
+
+    assert outcome.breakdown is not None
+    assert outcome.breakdown.total == Decimal("688")
+    assert [item.kind for item in outcome.breakdown.adjustments] == [
+        AdjustmentKind.FUEL,
+        AdjustmentKind.ROUNDING,
+    ]
+    # The calculation and the payable are both recorded, so the rounding is auditable.
+    details = outcome.breakdown.pricing_details
+    assert details["calculatedAmount"] == "687.50"
+    assert details["payableAmount"] == "688"
+    assert details["roundingPolicy"] == "nearest_whole_kes"
+
+
+def test_rounding_never_uses_a_pre_rounded_distance() -> None:
+    """The multiplication uses the real distance; only the shillings are rounded.
+
+    12.4 km x 150 = 1,860 exactly (the approved test case), and a half-shilling rounds up.
+    """
+    exact = engine.price_by_distance(
+        _context("12.4"), _config(base_rate_per_km=Decimal("150"), fuel_adjustment_percent=Decimal("0"))
+    )
+    assert exact.breakdown is not None
+    assert exact.breakdown.total == Decimal("1860")
+
+    halves_up = engine.price_by_distance(
+        _context("13"), _config(base_rate_per_km=Decimal("50"), fuel_adjustment_percent=Decimal("7"))
+    )
+    # 13 km x 53.50 = 695.50 -> 696.
+    assert halves_up.breakdown is not None
+    assert halves_up.breakdown.pricing_details["calculatedAmount"] == "695.50"
+    assert halves_up.breakdown.total == Decimal("696")
+
+
+def test_a_zero_distance_refuses_instead_of_pricing() -> None:
+    outcome = engine.price_by_distance(_context("0"), _config())
+
+    assert not outcome.is_priced
+    assert outcome.reason == engine.Reason.DISTANCE_REQUIRED
+
+
+def test_a_negative_distance_refuses_instead_of_pricing() -> None:
+    outcome = engine.price_by_distance(_context("-4.2"), _config())
+
+    assert not outcome.is_priced
+    assert outcome.reason == engine.Reason.DISTANCE_REQUIRED
 
 
 # ------------------------------------------------------------------ admin configuration
@@ -534,3 +587,244 @@ async def test_the_customer_sees_the_arithmetic_but_not_the_working(
     assert calculation["pricingModel"] == "distance_based"
     assert Decimal(calculation["total"]["amount"]) == Decimal("5500.00")
     assert calculation["pricingDetails"]["distanceKm"] == "100.00"
+
+
+# ------------------------------------------------------------------ the approved test cases
+
+
+class _DistanceRouter:
+    """A stub router that reports whatever road distance a test wants, with no network call."""
+
+    name = "stub-router"
+
+    def __init__(self, km: float) -> None:
+        self._km = km
+
+    async def route(
+        self, origin: LatLng, destination: LatLng, *, profile: str = "driving"
+    ) -> RoutingResult:
+        del origin, destination, profile
+        return RoutingResult(
+            distance_km=self._km,
+            duration_seconds=max(int(self._km / 50 * 3600), 60),
+            geometry=(LatLng(-0.3031, 36.08), LatLng(-0.5, 36.3)),
+            summary="stub route",
+            provider=self.name,
+        )
+
+
+def _use_fresh_route_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Isolate the route cache.
+
+    ``app.cache`` keeps a process-global cache, and every quote test routes from the dispatch
+    point to itself - the same cache key. Without a fresh cache per test, a distance chosen here
+    would be silently served from another test's cached 100 km.
+    """
+    from app.cache import MemoryCache
+
+    async def _fresh() -> MemoryCache:
+        return MemoryCache()
+
+    monkeypatch.setattr("app.services.routing.get_cache", _fresh)
+
+
+def _install_distance_router(monkeypatch: pytest.MonkeyPatch, km: float) -> None:
+    """Swap only the router, keeping the fixture's geocoder, so a test can pick the distance."""
+    import app.services.routing as routing_service
+
+    _use_fresh_route_cache(monkeypatch)
+    geocoder, _ = routing_service.get_providers()
+    monkeypatch.setattr(
+        "app.services.routing.get_providers", lambda: (geocoder, _DistanceRouter(km))
+    )
+
+
+async def test_an_unlisted_destination_at_ten_km_uses_the_configured_rate(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Case 2: an unlisted location 10 km away, at 150 KES/km, pays 1,500 KES."""
+    await _configure_priced_nakuru(client)
+    await _activate(client, base="150", fuel="0")
+    _install_distance_router(monkeypatch, 10.0)
+
+    body = await _run_pipeline(client, label="Naivasha Town")
+
+    assert body["status"] == "completed", body
+    assert body["destination"] is None
+    assert body["pricingModel"] == "distance_based"
+    assert Decimal(str(body["fee"]["amount"])) == Decimal("1500.00")
+    assert Decimal(str(body["distanceKm"])) == Decimal("10.00")
+
+
+async def test_an_unlisted_destination_at_twelve_point_four_km_uses_the_configured_rate(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Case 3: an unlisted location 12.4 km away, at 150 KES/km, pays 1,860 KES."""
+    await _configure_priced_nakuru(client)
+    await _activate(client, base="150", fuel="0")
+    _install_distance_router(monkeypatch, 12.4)
+
+    body = await _run_pipeline(client, label="Naivasha Town")
+
+    assert body["status"] == "completed", body
+    assert body["pricingModel"] == "distance_based"
+    assert Decimal(str(body["distanceKm"])) == Decimal("12.40")
+    assert Decimal(str(body["fee"]["amount"])) == Decimal("1860")
+
+
+async def test_the_admin_breakdown_records_the_rounded_payable(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A distance quote with cents is rounded, and both amounts are recorded for audit."""
+    await _configure_priced_nakuru(client)
+    await _activate(client, base="100", fuel="10")  # effective 110.00/km
+    _install_distance_router(monkeypatch, 12.45)  # 12.45 x 110 = 1369.50 -> 1370
+
+    body = await _run_pipeline(client, label="Naivasha Town")
+
+    assert body["status"] == "completed", body
+    assert Decimal(str(body["fee"]["amount"])) == Decimal("1370")
+    assert body["pricingExplanation"].endswith("= KES 1370.00.")
+
+    detail = (await client.get(f"/api/v1/admin/quotes/{body['id']}")).json()
+    details = detail["breakdown"]["pricingDetails"]
+    assert details["calculatedAmount"] == "1369.50"
+    assert details["payableAmount"] == "1370"
+    assert details["roundingPolicy"] == "nearest_whole_kes"
+    assert "rounding" in [adjustment["kind"] for adjustment in detail["breakdown"]["adjustments"]]
+
+
+async def test_a_listed_destination_without_an_active_price_is_not_priced_from_an_older_version(
+    client: AsyncClient,
+) -> None:
+    """Case 4: once a new version replaces the old one, the retired fixed price must not apply."""
+    await _configure_priced_nakuru(client)  # version 1 prices Nakuru at 1,500 and is active
+
+    version = await client.post(
+        "/api/v1/admin/pricing-versions",
+        json={"label": "2026-02", "effectiveFrom": "2026-02-01"},
+    )
+    assert version.status_code == 201, version.text
+    version_id = version.json()["id"]
+
+    # Version 2 prices a different destination only, so Nakuru has no active fixed price.
+    other = await client.post(
+        "/api/v1/admin/destinations", json={"name": "Eldoret", "code": "ELD"}
+    )
+    assert other.status_code == 201, other.text
+    rule = await client.post(
+        "/api/v1/admin/pricing-rules",
+        json={"destinationId": other.json()["id"], "basePrice": "900.00", "versionId": version_id},
+    )
+    assert rule.status_code == 201, rule.text
+    await client.post(f"/api/v1/admin/pricing-versions/{version_id}/confirm-validation", json={})
+    activated = await client.post(f"/api/v1/admin/pricing-versions/{version_id}/activate")
+    assert activated.status_code == 200, activated.text
+
+    body = await _run_pipeline(client, label="Nakuru")
+
+    assert body["status"] == "needs_review", body
+    assert body["failure"]["code"] == "NO_PRICING_RULE"
+    # Crucially, the retired 1,500 price is nowhere in the result.
+    assert body["fee"] is None
+
+
+async def test_a_routing_failure_asks_for_a_manual_quotation_instead_of_pricing(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Case 5: no road distance means no distance-based price, and a manual quotation is asked."""
+    await _configure_priced_nakuru(client)
+    await _activate(client)  # a rate is active, but must not be reached
+
+    import app.services.routing as routing_service
+
+    _use_fresh_route_cache(monkeypatch)
+    _, router = routing_service.get_providers()
+
+    async def _boom(origin: LatLng, destination: LatLng, *, profile: str = "driving") -> RoutingResult:
+        del origin, destination, profile
+        raise ProviderError("upstream down", provider="stub-router", retryable=True)
+
+    monkeypatch.setattr(router, "route", _boom)
+
+    body = await _run_pipeline(client, label="Naivasha Town")
+
+    assert body["status"] == "needs_review", body
+    assert body["failure"]["code"] == "ROUTING_UNAVAILABLE"
+    assert body["fee"] is None
+    assert body["pricingModel"] is None
+    steps = {step["key"]: step["state"] for step in body["steps"]}
+    assert steps["route"] == "failed"
+    # The pricing step never ran, so a distance-based figure can never have been shown.
+    assert steps["pricing"] == "pending"
+
+
+def test_an_ambiguous_token_match_is_refused_not_guessed() -> None:
+    """Case 6: a place whose name matches two destinations is not silently assigned to one."""
+    from app.providers.base import Confidence, GeoLocation
+    from app.services import destinations as destination_service
+
+    class _Destination:
+        def __init__(self, identifier: str) -> None:
+            self.id = identifier
+
+    by_id = {"a": _Destination("a"), "b": _Destination("b")}
+    aliases = {"nakuru": "a", "gilgil": "b"}
+    location = GeoLocation(
+        id="osm:ambiguous",
+        label="Nakuru Gilgil",
+        secondary=None,
+        position=LatLng(-0.3, 36.08),
+        confidence=Confidence.HIGH,
+        place_parts=("Nakuru Gilgil",),
+    )
+
+    assert destination_service.match_by_alias(location, aliases, by_id) is None
+
+
+async def test_a_client_supplied_amount_cannot_override_the_calculated_fee(
+    client: AsyncClient,
+) -> None:
+    """Case 7: the amount is computed server-side; a caller cannot inject one."""
+    await _configure_priced_nakuru(client)
+
+    created = await client.post(
+        "/api/v1/public/quotes",
+        json={
+            "position": {"lat": DISPATCH_LAT, "lng": DISPATCH_LNG},
+            "label": "Nakuru",
+            "resolved": True,
+            "fee": {"amount": "1.00", "currency": "KES"},
+            "amount": "1.00",
+            "total": "1.00",
+            "price": "1.00",
+        },
+    )
+    assert created.status_code == 202, created.text
+
+    body = (await client.get(f"/api/v1/public/quotes/{created.json()['id']}")).json()
+
+    assert body["status"] == "completed", body
+    assert Decimal(str(body["fee"]["amount"])) == Decimal("1500.00")
+
+
+async def test_changing_the_rate_does_not_rewrite_an_existing_quote(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Case 9: the configured rate is applied consistently, and a later change is not retroactive."""
+    await _configure_priced_nakuru(client)
+    _install_distance_router(monkeypatch, 10.0)
+    await _activate(client, base="50", fuel="0")
+
+    first = await _run_pipeline(client, label="Naivasha Town")
+    assert Decimal(str(first["fee"]["amount"])) == Decimal("500.00")  # 10 km x 50
+
+    await _activate(client, label="November rate", base="80", fuel="0")
+
+    # The saved quote is immutable: the old rate is still what it was priced at.
+    stored = (await client.get(f"/api/v1/public/quotes/{first['id']}")).json()
+    assert Decimal(str(stored["fee"]["amount"])) == Decimal("500.00")
+
+    # A new quote uses the new rate.
+    second = await _run_pipeline(client, label="Naivasha Town")
+    assert Decimal(str(second["fee"]["amount"])) == Decimal("800.00")  # 10 km x 80

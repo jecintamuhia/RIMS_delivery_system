@@ -79,8 +79,12 @@ DYNAMIC_PRICING_FALLBACK_REASONS = frozenset(
 )
 
 #: Codes that mean "a RIMs person should look at this quote".
+#: A routing failure belongs here: without a real road distance the system cannot price a
+#: distance-based delivery, so it must say a manual quotation is required rather than present a
+#: transient error that looks like a maybe.
 REVIEW_CODES = frozenset(
     {
+        ErrorCode.ROUTING_UNAVAILABLE,
         ErrorCode.DESTINATION_UNSUPPORTED,
         ErrorCode.NO_PRICING_RULE,
         ErrorCode.ROAD_TYPE_REQUIRED,

@@ -1,10 +1,10 @@
 # RIMs Hardware & Supplies delivery pricing
 
-RIMs is a fixed destination delivery pricing system. The customer selects a real location, the API resolves it, obtains a road route and distance, resolves a configured destination, and prices it from the active RIMs price list. Distance is informational and does not set the fee. If routing, destination matching, or active pricing is unavailable, the quote remains unpriced and the customer is directed to RIMs for a manual quote.
+RIMs prices each delivery with one of two explicitly separated models. If the location matches a configured RIMs destination, the quote uses the official fixed price from the active price list (**model A**) — the road distance never changes it. If the location is outside the price list and RIMs has configured an active distance rate, the quote uses the real road distance multiplied by that rate (**model B**). The two models never blend, and the engine never invents a rate, a distance or a nearest-neighbour price. Distance-based amounts are carried to the cent and the final payable is rounded to the nearest whole Kenyan shilling. If routing, destination matching, or active pricing is unavailable, the quote is left unpriced or flagged for manual review and the customer is directed to RIMs for a quotation.
 
 ## Architecture
 
-- `backend/`: FastAPI modular monolith, async SQLAlchemy, Alembic migrations, signed httpOnly admin sessions, RBAC, CSRF checks, audit logging, quote pipeline, fixed pricing engine, and provider adapters.
+- `backend/`: FastAPI modular monolith, async SQLAlchemy, Alembic migrations, signed httpOnly admin sessions, RBAC, CSRF checks, audit logging, quote pipeline, hybrid pricing engine (fixed destination + distance-based), and provider adapters.
 - `rims-delivery-ui/`: React 19, TypeScript, Vite, TanStack Query and Leaflet. Customer and admin pages use the same typed API client; the API is the source of quote amounts and destination data.
 - PostgreSQL is the deployment database; SQLite is supported for local development/tests. Redis is optional locally and enabled by the Docker Compose deployment.
 - Nominatim and OSRM are the default real, keyless geocoding and road routing providers. Their public endpoints are rate-limited courtesy services. Mapbox adapters are available with a server-side API key.
@@ -51,8 +51,9 @@ Vite proxies `/api` to `http://localhost:8000`. `VITE_USE_MOCKS=false` is requir
 4. Confirm the imported destinations and fixed amounts against the approved RIMs source sheet. Preserve flagged names for review: `G!TUAMBA`, `TOWN AREA`, `FLYOVER`, `JUNCTION`, `DTI`, `SLAUGHTER`, `DCK`, and `VI`.
 5. Validate the draft, record reviewer approval, then activate it. Only an active version is used for new quotes; prior quote records retain the version and amount used.
 6. Review the dispatch pin and contact details under **Dispatch & Settings**. Destination coordinates, aliases and catchment data are maintained under **Destinations**.
+7. The distance-based fallback (model B) is configured under **Distance Pricing**. It applies only to locations outside the fixed price list, and only while a rate is active. A fresh install seeds a 150 KES/km default rate; change it only on RIMs' instruction. A rate is created as a draft, activated by an admin, and retired to switch it off. Every distance-based quote records the distance, base rate, fuel adjustment, effective rate, calculated amount and rounded payable, so the amount is auditable. The amount the customer pays is the rounded whole-shilling figure.
 
-Do not create distance, fuel, road, vehicle, load, or percentage pricing adjustments unless RIMs has approved those exact rules. Imported fixed destination prices must remain the governing base charge.
+Do not create road, vehicle, load or percentage pricing adjustments unless RIMs has approved those exact rules. A fixed destination price remains the governing charge wherever a destination matches; the distance rate is only ever a fallback for locations outside the list.
 
 ## Docker deployment / client demo
 

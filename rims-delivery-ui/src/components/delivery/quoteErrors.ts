@@ -1,7 +1,6 @@
 import {
   AlertTriangle,
   MapPinOff,
-  Route,
   SearchX,
   WifiOff,
   ServerCrash,
@@ -45,11 +44,11 @@ export const errorCopy: Partial<Record<ErrorCode, ErrorCopy>> & {
     next: "change-location",
   },
   ROUTING_UNAVAILABLE: {
-    title: "Road distance isn’t available right now",
-    body: "Our routing service didn’t respond. Nothing has been charged or saved. Try again in a moment.",
-    icon: Route,
+    title: "This delivery needs a manual quotation",
+    body: "We couldn’t confirm the road distance for this route, so we can’t price it automatically. Nothing has been charged or saved — please contact RIMs and we’ll price it for you.",
+    icon: Hammer,
     tone: "warn",
-    next: "retry",
+    next: "contact",
   },
   DESTINATION_UNSUPPORTED: {
     title: "We don’t have a delivery area for this location yet",

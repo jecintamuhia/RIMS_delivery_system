@@ -575,7 +575,18 @@ export async function mockRequest<T>(
         currency: "KES",
         distanceKm: km,
       });
-    const total = Number((km * perKm).toFixed(2));
+    const calculated = Number((km * perKm).toFixed(2));
+    const total = Math.round(calculated);
+    const fuelAmount = Number((km * base * (fuel / 100)).toFixed(2));
+    const adjustments: { label: string; amount: number; kind: string }[] = [];
+    if (fuelAmount)
+      adjustments.push({ label: "Fuel adjustment", amount: fuelAmount, kind: "fuel" });
+    if (total !== calculated)
+      adjustments.push({
+        label: "Rounding",
+        amount: Number((total - calculated).toFixed(2)),
+        kind: "rounding",
+      });
     return out({
       priced: true,
       currency: "KES",
@@ -586,13 +597,7 @@ export async function mockRequest<T>(
       fuelAdjustmentPercent: fuel,
       effectiveRatePerKm: perKm,
       total,
-      adjustments: [
-        {
-          label: "Fuel adjustment",
-          amount: Number((km * base * (fuel / 100)).toFixed(2)),
-          kind: "fuel",
-        },
-      ],
+      adjustments,
       notes: [],
     });
   }

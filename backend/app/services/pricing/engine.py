@@ -23,6 +23,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from app.services.pricing.models import (
     CURRENCY_PRECISION,
+    PAYABLE_PRECISION,
     Adjustment,
     AdjustmentKind,
     DynamicPricingConfig,
@@ -56,6 +57,16 @@ class Reason:
 
 def quantise(value: Decimal) -> Decimal:
     return value.quantize(CURRENCY_PRECISION, rounding=ROUND_HALF_UP)
+
+
+def round_payable(value: Decimal) -> Decimal:
+    """Round a computed amount to the nearest whole Kenyan shilling, halves up.
+
+    Used for the final payable of a distance-based quote. The amount carried through the
+    calculation is never pre-rounded: the multiplication uses the real road distance, and only
+    the amount the customer is asked to pay is rounded.
+    """
+    return value.quantize(PAYABLE_PRECISION, rounding=ROUND_HALF_UP)
 
 
 def _applicable_rules(context: PricingContext, policy: PricingPolicy) -> list[RuleCandidate]:
@@ -250,11 +261,14 @@ def price_by_distance(
     """Model B: price from the actual road distance and RIMs' configured dynamic rate.
 
         effective rate = base rate x (1 + fuel adjustment / 100)
-        amount         = distance x effective rate, floored at the minimum charge
+        calculated     = distance x effective rate, floored at the minimum charge
+        payable        = calculated rounded to the nearest whole Kenyan shilling (halves up)
 
-    Every input of that calculation is written into ``breakdown.pricing_details`` so an admin
-    can reconstruct exactly why the system returned the amount. The engine refuses when no
-    configuration is active or when no real road distance exists - it never invents either.
+    The multiplication uses the real, unrounded road distance; only the final payable is rounded.
+    Every input and both amounts (calculated and payable) are written into
+    ``breakdown.pricing_details`` so an admin can reconstruct exactly why the system returned the
+    amount. The engine refuses when no configuration is active or when no real road distance
+    exists - it never invents either.
     """
     if config is None:
         return _refuse(
@@ -282,10 +296,13 @@ def price_by_distance(
     base_rate = quantise(config.base_rate_per_km)
     effective_rate = config.effective_rate_per_km
     base_amount = quantise(distance * base_rate)
-    total = quantise(distance * effective_rate)
+    # The calculation is carried to the cent from the *unrounded* road distance...
+    calculated_amount = quantise(distance * effective_rate)
+    # ...but the customer is asked to pay whole shillings.
+    total = round_payable(calculated_amount)
 
     adjustments: list[Adjustment] = []
-    fuel_amount = total - base_amount
+    fuel_amount = calculated_amount - base_amount
     if fuel_amount != ZERO:
         sign = "+" if config.fuel_adjustment_percent > ZERO else ""
         adjustments.append(
@@ -300,9 +317,25 @@ def price_by_distance(
             )
         )
 
+    rounding_amount = total - calculated_amount
+    if rounding_amount != ZERO:
+        adjustments.append(
+            Adjustment(
+                label="Rounding",
+                amount=rounding_amount,
+                kind=AdjustmentKind.ROUNDING,
+                detail=(
+                    f"KES {calculated_amount} rounded to the nearest whole shilling: "
+                    f"KES {total}."
+                ),
+            )
+        )
+    rounded_amount = total
+
     minimum_applied = False
     if config.min_charge is not None and total < config.min_charge:
-        shortfall = quantise(config.min_charge - total)
+        floored = round_payable(config.min_charge)
+        shortfall = floored - total
         adjustments.append(
             Adjustment(
                 label="Minimum charge applied",
@@ -311,19 +344,20 @@ def price_by_distance(
                 detail=f"RIMs minimum distance-based charge is KES {quantise(config.min_charge)}.",
             )
         )
-        total = quantise(config.min_charge)
+        total = floored
         minimum_applied = True
 
-    total = quantise(total)
+    total = round_payable(total)
 
     fuel_word = ""
     if config.fuel_adjustment_percent != ZERO:
         sign = "+" if config.fuel_adjustment_percent > ZERO else ""
         fuel_word = f", {sign}{config.fuel_adjustment_percent}% fuel adjustment"
+    rounded_word = f", rounded to KES {rounded_amount}" if rounding_amount != ZERO else ""
     notes = [
         (
             f"Dynamically priced: {quantise(distance)} km x KES {effective_rate}/km "
-            f"(base KES {base_rate}/km{fuel_word}) = KES {total}."
+            f"(base KES {base_rate}/km{fuel_word}) = KES {calculated_amount}{rounded_word}."
         )
     ]
     if context.destination_id is None:
@@ -349,7 +383,9 @@ def price_by_distance(
                 "baseRatePerKm": str(base_rate),
                 "fuelAdjustmentPercent": str(config.fuel_adjustment_percent),
                 "effectiveRatePerKm": str(effective_rate),
-                "calculatedAmount": str(total),
+                "calculatedAmount": str(calculated_amount),
+                "payableAmount": str(total),
+                "roundingPolicy": "nearest_whole_kes",
                 "configLabel": config.version_label,
                 "configId": config.version_id,
                 **({"minCharge": str(quantise(config.min_charge))} if config.min_charge is not None else {}),

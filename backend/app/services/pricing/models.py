@@ -15,6 +15,11 @@ from decimal import Decimal
 
 CURRENCY_PRECISION = Decimal("0.01")
 
+#: Computations are carried to the cent, but the amount a customer is asked to actually pay is
+#: rounded to the nearest whole Kenyan shilling. This affects the final distance-based payable
+#: only; official fixed destination prices are charged exactly as configured.
+PAYABLE_PRECISION = Decimal("1")
+
 
 class PricingModel(str, enum.Enum):
     """Which of the two pricing models produced an amount. Never blended, never implied."""
@@ -32,6 +37,8 @@ class AdjustmentKind(str, enum.Enum):
     MINIMUM = "minimum"
     #: The fuel adjustment applied to the distance-based rate (model B only).
     FUEL = "fuel"
+    #: The line that rounds a distance-based amount to the nearest whole shilling (model B only).
+    ROUNDING = "rounding"
 
 
 @dataclass(frozen=True, slots=True)
