@@ -411,6 +411,8 @@ async def test_a_location_outside_the_price_list_is_priced_from_its_road_distanc
     assert "100.00 km" in explanation
     assert "55.00/km" in explanation
     assert "fuel adjustment" in explanation
+    # 100.00 x 55.00 is already whole, so no rounding note is invented.
+    assert "rounded to" not in explanation
 
 
 async def test_an_official_price_is_never_replaced_by_the_distance_rate(
@@ -684,7 +686,9 @@ async def test_the_admin_breakdown_records_the_rounded_payable(
 
     assert body["status"] == "completed", body
     assert Decimal(str(body["fee"]["amount"])) == Decimal("1370")
-    assert body["pricingExplanation"].endswith("= KES 1370.00.")
+    # The sentence must reconcile: show the raw product and the rounded payable.
+    assert body["pricingExplanation"].endswith(", rounded to KES 1370.00.")
+    assert "= KES 1369.50" in body["pricingExplanation"]
 
     detail = (await client.get(f"/api/v1/admin/quotes/{body['id']}")).json()
     details = detail["breakdown"]["pricingDetails"]

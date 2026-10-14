@@ -160,7 +160,21 @@ def _pricing_explanation(quote: Quote, calculation: QuoteCalculation | None) -> 
             line = f"Road distance {distance} km x {currency} {effective}/km"
             if base_rate and percent not in (None, "", "0", "0.00"):
                 line += f" (base {currency} {base_rate}/km, {percent}% fuel adjustment)"
-            return f"{line} = {currency} {_money(calculation.total_amount)}."
+            total = _money(calculation.total_amount)
+            calculated = details.get("calculatedAmount")
+            # The equation must reconcile: when whole-shilling rounding changed the amount, show
+            # the raw product and the rounded payable instead of printing a sum that does not
+            # equal what the customer is charged. A difference beyond half a shilling is not
+            # rounding (e.g. a minimum charge), so it is left to the plain total.
+            if calculated is not None:
+                calculated_dec = Decimal(calculated)
+                difference = abs(Decimal(calculation.total_amount) - calculated_dec)
+                if Decimal("0") < difference <= Decimal("0.50"):
+                    return (
+                        f"{line} = {currency} {_money(calculated_dec)}, "
+                        f"rounded to {currency} {total}."
+                    )
+            return f"{line} = {currency} {total}."
         return f"Distance-based delivery: {currency} {_money(calculation.total_amount)}."
     destination = quote.destination
     name = destination.name if destination is not None else "this delivery location"
