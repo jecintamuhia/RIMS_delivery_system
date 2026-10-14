@@ -1,4 +1,3 @@
-
 services:
   db:
     image: postgis/postgis:16-3.4
@@ -42,6 +41,10 @@ services:
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:?Set BOOTSTRAP_ADMIN_EMAIL in the root .env file}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?Set BOOTSTRAP_ADMIN_PASSWORD in the root .env file}
       PROVIDER_USER_AGENT: "${PROVIDER_USER_AGENT:-RIMsDeliveryPricing/1.0}"
+      # The api is reachable only through the bundled nginx, which overwrites X-Forwarded-For with
+      # the real client address, so trusting it is safe here and lets the rate limiter distinguish
+      # clients instead of collapsing every request onto the proxy's address.
+      TRUST_FORWARDED_FOR: ${TRUST_FORWARDED_FOR:-true}
     depends_on:
       db:
         condition: service_healthy
