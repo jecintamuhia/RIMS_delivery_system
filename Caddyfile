@@ -1,0 +1,16 @@
+# Caddy terminates TLS for the RIMs app and reverse-proxies everything to the web container,
+# which serves the SPA and proxies /api to the API. Certificates are obtained and renewed
+# automatically from Let's Encrypt; nothing needs to be managed by hand.
+#
+# DOMAIN and ACME_EMAIL are injected from .env.production by docker-compose.prod.yml.
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Caddy sets X-Forwarded-For / X-Forwarded-Proto for the real client automatically; the web
+	# container's nginx trusts these because Caddy is on the same Docker network.
+	reverse_proxy web:80
+}

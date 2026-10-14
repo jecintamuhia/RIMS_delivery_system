@@ -69,6 +69,15 @@ Compose starts PostGIS, Redis, runs Alembic migrations before the API, bootstrap
 
 The public OSM endpoints may decline requests under load. For a committed client demonstration or production traffic, configure supported provider credentials or an organization-managed provider endpoint, provide an honest `PROVIDER_USER_AGENT`, and check `/ready` plus a real quote before the demonstration. A failed route is reported as unavailable; the application never draws a fabricated route or distance.
 
+### Production
+
+For a real deployment with HTTPS, use `docker-compose.prod.yml` and the Caddy TLS edge. Only Caddy publishes ports (80/443); the API and web containers stay on the internal network, the API runs with `ENVIRONMENT=production`, `DOCS_ENABLED=false`, `SESSION_HTTPS_ONLY=true` and `TRUST_FORWARDED_FOR=true`, and certificates are issued and renewed automatically. See [DEPLOYMENT.md](DEPLOYMENT.md) for the full runbook (server setup, DNS, secrets, first admin, verification, updates and backups).
+
+```bash
+cp .env.production.example .env.production   # fill in DOMAIN, secrets and admin credentials
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+```
+
 ## Tests and checks
 
 ```powershell

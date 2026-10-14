@@ -1,0 +1,100 @@
+# Production stack for RIMs.
+#
+#   cp .env.production.example .env.production   # then fill it in
+#   docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+#
+# Only Caddy publishes ports (80 and 443). The API and web containers are reachable solely on the
+# internal network, and Caddy obtains and renews TLS certificates automatically.
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: rims
+      POSTGRES_USER: rims
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rims -d rims"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: always
+
+  api:
+    build: ./backend
+    env_file:
+      - .env.production
+    environment:
+      # Pinned so a mis-set environment file cannot accidentally run production in debug/staging.
+      ENVIRONMENT: production
+      DEBUG: "false"
+      DOCS_ENABLED: "false"
+      SESSION_HTTPS_ONLY: "true"
+      TRUST_FORWARDED_FOR: "true"
+      DATABASE_URL: postgresql+asyncpg://rims:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}@db:5432/rims
+      REDIS_URL: redis://redis:6379/0
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env.production}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env.production}
+      CORS_ORIGINS: https://${DOMAIN:?Set DOMAIN in .env.production}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:?Set BOOTSTRAP_ADMIN_EMAIL in .env.production}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?Set BOOTSTRAP_ADMIN_PASSWORD in .env.production}
+      PROVIDER_USER_AGENT: ${PROVIDER_USER_AGENT:?Set PROVIDER_USER_AGENT in .env.production}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: always
+
+  web:
+    build:
+      context: ./rims-delivery-ui
+      args:
+        VITE_API_BASE_URL: /api/v1
+        VITE_USE_MOCKS: "false"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: always
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env.production}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in .env.production}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_started
+    restart: always
+
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
