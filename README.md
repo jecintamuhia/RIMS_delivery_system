@@ -78,6 +78,12 @@ cp .env.production.example .env.production   # fill in DOMAIN, secrets and admin
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
 ```
 
+To host the frontend on Vercel and the API on a managed host instead of running both in
+Compose, use the split-host setup: Vercel serves the SPA and reverse-proxies `/api/*` to the
+API (keeping the session cookie first-party), and the API runs from `backend/Dockerfile` with a
+managed PostgreSQL database. See [DEPLOYMENT_VERCEL.md](DEPLOYMENT_VERCEL.md); `render.yaml` and
+`rims-delivery-ui/vercel.json` hold the host configuration.
+
 ## Tests and checks
 
 ```powershell

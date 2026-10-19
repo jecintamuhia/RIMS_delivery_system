@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.config import get_settings
+from app.db.urls import normalize_database_url
 
 _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
@@ -21,7 +22,7 @@ _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 def _build_engine() -> AsyncEngine:
     settings = get_settings()
-    url = settings.database_url
+    url = normalize_database_url(settings.database_url)
     kwargs: dict[str, object] = {"echo": settings.db_echo, "future": True, "pool_pre_ping": True}
     if url.startswith("sqlite"):
         # An in-memory SQLite database is per-connection, so a single shared connection is required.

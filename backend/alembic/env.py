@@ -16,13 +16,15 @@ import app.models  # noqa: F401  - imported for its side effect: mapper registra
 from alembic import context
 from app.config import get_settings
 from app.db.base import Base
+from app.db.urls import normalize_database_url
 
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 settings = get_settings()
-config.set_main_option("sqlalchemy.url", settings.database_url)
+database_url = normalize_database_url(settings.database_url)
+config.set_main_option("sqlalchemy.url", database_url)
 
 target_metadata = Base.metadata
 
@@ -59,7 +61,7 @@ async def _run_async_migrations() -> None:
 def run_migrations_offline() -> None:
     """Emit SQL to stdout without connecting (``alembic upgrade head --sql``)."""
     context.configure(
-        url=settings.database_url,
+        url=database_url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -82,7 +84,7 @@ def _run_migrations_sync_sqlite() -> None:
     from sqlalchemy import create_engine
     from sqlalchemy.engine import make_url
 
-    url = make_url(settings.database_url)
+    url = make_url(database_url)
     sync_url = url.set(drivername="sqlite")
     engine = create_engine(sync_url)
     with engine.connect() as connection:

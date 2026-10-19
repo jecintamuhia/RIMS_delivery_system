@@ -13,4 +13,5 @@ COPY alembic ./alembic
 RUN pip install --no-cache-dir '.[postgres,redis]'
 
 EXPOSE 8000
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+# Honour an injected $PORT (Render, Cloud Run, ...) but fall back to 8000 locally / in Compose.
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
