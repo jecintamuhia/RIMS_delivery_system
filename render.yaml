@@ -24,11 +24,13 @@ services:
     runtime: docker
     region: frankfurt
     plan: starter
-    rootDir: backend
-    dockerfilePath: ./Dockerfile
+    # Both paths are relative to the repo root (Render's rule), not to each other.
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
     healthCheckPath: /health
-    autoDeploy: true
     envVars:
+      - key: PORT
+        value: "10000"
       - key: ENVIRONMENT
         value: production
       - key: DEBUG
