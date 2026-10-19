@@ -32,8 +32,6 @@ class ErrorCode:
     UNKNOWN = "UNKNOWN"
 
 
-#: Customer-facing default wording. Kept here (not in the database) because these describe
-#: system behaviour, not RIMs business data. Admins can override per-error text via settings.
 DEFAULT_MESSAGES: dict[str, str] = {
     ErrorCode.INVALID_LOCATION: (
         "We couldn't identify that location. Please search again or select a location on the map."

@@ -95,7 +95,6 @@ def _unsign(signed: str, secret: str, max_age_seconds: int) -> str:
     return result
 
 
-# ── CSRF ───────────────────────────────────────────────────────────────────────────
 
 
 def new_csrf_token() -> str:
@@ -108,7 +107,6 @@ def csrf_matches(sent: str | None, expected: str | None) -> bool:
     return hmac.compare_digest(sent, expected)
 
 
-# ── misc ───────────────────────────────────────────────────────────────────────────
 
 
 def opaque_token(length: int = 24) -> str:

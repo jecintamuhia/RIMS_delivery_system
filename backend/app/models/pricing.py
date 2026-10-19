@@ -47,7 +47,6 @@ if TYPE_CHECKING:  # pragma: no cover
 else:  # SQLAlchemy resolves these by class at mapper configuration time.
     from app.models.geography import Destination, RoadType, VehicleCategory
 
-#: Prices are entered in shillings and cents.
 Money = Numeric(12, 2)
 
 
@@ -79,13 +78,10 @@ class PricingVersion(Base, TimestampMixin):
         String(32), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    #: Set when an administrator reviewed the version and it passed validation. Kept so the audit
-    #: trail shows *who* approved the prices customers are being quoted, not just that they shipped.
     validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     validated_by_id: Mapped[str | None] = mapped_column(
         String(32), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    #: Short note from the reviewer, e.g. "Confirmed against RIMs' 5 Oct list".
     validation_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     rules: Mapped[list[PricingRule]] = relationship(
@@ -128,18 +124,12 @@ class DynamicPricingVersion(Base, TimestampMixin):
         nullable=False,
         default=PricingVersionStatus.DRAFT,
     )
-    #: Shillings per kilometre before the fuel adjustment.
     base_rate_per_km: Mapped[Decimal] = mapped_column(Money, nullable=False)
-    #: Signed percentage applied to the base rate. Positive raises the rate (fuel increase),
-    #: negative lowers it. Never applied to fixed destination prices.
     fuel_adjustment_percent: Mapped[Decimal] = mapped_column(
         Numeric(6, 2), nullable=False, default=Decimal("0")
     )
-    #: Floor for a distance-based quote. ``None`` means no floor is applied.
     min_charge: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="KES")
-    #: When this configuration took (or will take) effect. Activation is still the switch;
-    #: this is the recorded business timestamp shown in the audit trail.
     effective_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by_id: Mapped[str | None] = mapped_column(
@@ -202,15 +192,12 @@ class PricingRule(Base):
         default=AdjustmentType.NONE,
     )
     adjustment_value: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
-    #: Road surcharge applied on top of the destination base price. Lets RIMs price
-    #: "Nairobi costs X, plus this on rough roads" instead of duplicating the base price.
     road_adjustment_type: Mapped[AdjustmentType] = mapped_column(
         string_enum(AdjustmentType, length=16),
         nullable=False,
         default=AdjustmentType.NONE,
     )
     road_adjustment_value: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
-    #: Vehicle surcharge applied on top of the destination base price.
     vehicle_adjustment_type: Mapped[AdjustmentType] = mapped_column(
         string_enum(AdjustmentType, length=16),
         nullable=False,
@@ -218,7 +205,6 @@ class PricingRule(Base):
     )
     vehicle_adjustment_value: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     min_charge: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
-    #: Higher wins when several rules match. Ties break by narrowest scope, then newest.
     priority: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     effective_from: Mapped[date] = mapped_column(Date, nullable=False)
     effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)

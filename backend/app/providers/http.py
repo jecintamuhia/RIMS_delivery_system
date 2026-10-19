@@ -38,7 +38,6 @@ class CircuitBreaker:
         if self._opened_at is None:
             return False
         if time.monotonic() - self._opened_at >= self.reset_seconds:
-            # Half-open: allow one probe through.
             self._opened_at = None
             self._failures = 0
             return False

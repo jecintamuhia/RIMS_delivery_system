@@ -24,7 +24,6 @@ class AuditLog(Base):
     actor_id: Mapped[str | None] = mapped_column(
         String(32), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    #: Denormalised so the entry stays readable after a user is deleted.
     actor_label: Mapped[str] = mapped_column(String(200), nullable=False, default="system")
     action: Mapped[str] = mapped_column(String(48), nullable=False, index=True)
     entity_type: Mapped[str] = mapped_column(String(48), nullable=False, index=True)

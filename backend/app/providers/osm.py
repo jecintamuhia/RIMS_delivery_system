@@ -27,7 +27,6 @@ logger = logging.getLogger("app.providers.osm")
 NOMINATIM_BASE = "https://nominatim.openstreetmap.org"
 OSRM_BASE = "https://router.project-osrm.org"
 
-#: Address elements that help destination matching. Ordered by usefulness.
 _PLACE_KEYS = (
     "town",
     "city",
@@ -81,7 +80,6 @@ class NominatimGeocoder:
         location = self._to_location(payload, 0)
         if location is None:
             raise ProviderNoResult("no address found for this point", self.name)
-        # A reverse hit on a building/country scale address is not a precise fix.
         if payload.get("type") in {"administrative", "country"}:
             return GeoLocation(
                 id=location.id,
@@ -102,8 +100,7 @@ class NominatimGeocoder:
         label = str(item.get("display_name") or "").strip()
         if not label:
             return None
-        # Nominatim omits "address" for some feature types, and it is untyped JSON: narrow once
-        # here so everything downstream can treat it as a real mapping.
+
         raw_address = item.get("address")
         address: dict[str, Any] = raw_address if isinstance(raw_address, dict) else {}
         parts = tuple(

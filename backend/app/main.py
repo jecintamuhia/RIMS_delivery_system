@@ -67,7 +67,6 @@ def _error_response(code: str, message: str, details: dict[str, object] | None, 
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def _app_error(request: Request, exc: AppError) -> JSONResponse:
-        # Deliberate, explainable failures are not logged as errors; they are expected states.
         log_event(
             logger,
             logging.INFO,
@@ -80,8 +79,7 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
-        # Flatten pydantic's error list into ``field -> message`` so the admin forms can show the
-        # problem next to the input that caused it.
+
         fields: dict[str, str] = {}
         for error in exc.errors():
             location = ".".join(str(part) for part in error.get("loc", ()) if part != "body")
@@ -135,8 +133,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         return _error_response(
             ErrorCode.SERVER,
             AppError(ErrorCode.SERVER).message,
-            # The request id is the one piece of diagnostic information safe to hand back: it
-            # lets an operator find the full traceback in the logs.
+
             {"requestId": request_id},
             STATUS_BY_CODE[ErrorCode.SERVER],
         )
@@ -145,8 +142,6 @@ def register_exception_handlers(app: FastAPI) -> None:
 def register_middleware(app: FastAPI, settings: Settings) -> None:
     app.add_middleware(RequestContextMiddleware)
 
-    # CORS with credentials: the admin app runs on a different origin and is cookie-authenticated,
-    # so the wildcard origin is never allowed.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -261,3 +256,4 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 
 app = create_app()
+

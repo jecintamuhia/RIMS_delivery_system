@@ -22,7 +22,6 @@ from starlette.responses import Response
 
 request_id_ctx: ContextVar[str] = ContextVar("request_id", default="-")
 
-#: Keys never written to logs, even if a caller passes them in an extra field.
 REDACT_KEYS = frozenset(
     {
         "password",
@@ -100,7 +99,6 @@ def configure_logging(*, level: str = "INFO", json_output: bool = False) -> None
     root.addHandler(handler)
     root.setLevel(level)
 
-    # Third-party noise that hides our own request logs.
     for noisy in ("uvicorn.access", "httpx", "httpcore", "aiosqlite", "sqlalchemy.engine.Engine"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
     logging.getLogger("uvicorn.error").addFilter(RequestIdFilter())
@@ -156,5 +154,5 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         return response
 
 
-def iter_request_ids() -> Iterator[str]:  # pragma: no cover - convenience for debugging
+def iter_request_ids() -> Iterator[str]:
     yield request_id_ctx.get()

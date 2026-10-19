@@ -43,7 +43,6 @@ class GeoLocation:
     secondary: str | None
     position: LatLng
     confidence: Confidence = Confidence.MEDIUM
-    #: Lower-cased town/county/suburb pieces extracted by the provider, used for destination matching.
     place_parts: tuple[str, ...] = field(default=())
 
 

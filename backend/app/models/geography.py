@@ -66,10 +66,8 @@ class Destination(Base, TimestampMixin):
     county: Mapped[str | None] = mapped_column(String(120), nullable=True)
     latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
-    #: Optional GeoJSON Polygon/MultiPolygon. When set it is authoritative for matching.
     boundary: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    #: Radius (km) around (latitude, longitude) that belongs to this destination.
-    #: This is an explicitly configured catchment area - never an arbitrary nearest-neighbour search.
+
     catchment_radius_km: Mapped[Decimal | None] = mapped_column(Numeric(8, 2), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
@@ -156,7 +154,6 @@ class RoadSegment(Base, TimestampMixin):
     latitude: Mapped[float] = mapped_column(Float, nullable=False)
     longitude: Mapped[float] = mapped_column(Float, nullable=False)
     radius_km: Mapped[Decimal] = mapped_column(Numeric(8, 2), nullable=False, default=Decimal("5.00"))
-    #: True when RIMs has signed this classification off. Unconfirmed segments are ignored.
     is_confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 

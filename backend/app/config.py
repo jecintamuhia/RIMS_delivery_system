@@ -25,31 +25,26 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,
-        # Parse CORS_ORIGINS ourselves below so both JSON arrays and comma-separated values
-        # work consistently in Docker and local shells.
+
         enable_decoding=False,
     )
 
-    # ── application ──────────────────────────────────────────────────────────────
     app_name: str = "RIMs Delivery Pricing API"
     environment: Environment = "development"
     debug: bool = False
     api_prefix: str = "/api/v1"
     docs_enabled: bool = True
 
-    # ── database ─────────────────────────────────────────────────────────────────
     database_url: str = "sqlite+aiosqlite:///./rims_delivery.db"
     db_echo: bool = False
     db_pool_size: int = 5
     db_max_overflow: int = 10
 
-    # ── cache (Redis optional; an in-process TTL cache is used when unset) ────────
     redis_url: SecretStr | None = None
     cache_ttl_geocode: int = 86_400
     cache_ttl_route: int = 3_600
     cache_max_entries: int = 5_000
 
-    # ── external providers ───────────────────────────────────────────────────────
     geocoding_provider: ProviderName = "osm"
     routing_provider: ProviderName = "osm"
     maps_api_key: SecretStr | None = None
@@ -61,7 +56,6 @@ class Settings(BaseSettings):
     provider_bias_lat: float | None = None
     provider_bias_lng: float | None = None
 
-    # ── security ─────────────────────────────────────────────────────────────────
     jwt_secret: SecretStr | None = None
     session_secret: SecretStr | None = None
     session_cookie_name: str = "rims_admin_session"
@@ -74,8 +68,7 @@ class Settings(BaseSettings):
     rate_limit_window_seconds: int = 60
     rate_limit_auth_requests: int = 10
     rate_limit_auth_window_seconds: int = 300
-    #: Location search, reverse geocoding and route previews each cost a third-party call,
-    #: so they get their own, tighter budget than ordinary public reads.
+
     rate_limit_geo_requests: int = 30
     rate_limit_geo_window_seconds: int = 60
     #: Honour X-Forwarded-For / X-Real-IP. Enable only behind a trusted reverse proxy,
@@ -95,26 +88,13 @@ class Settings(BaseSettings):
     quote_expires_after_hours: int = 24
     max_quote_attempts: int = 5
 
-    # ── distance-based fallback pricing (pricing model B) ────────────────────────
-    # A delivery location that is outside RIMs' official destination price list is priced from
-    # its real road distance at this rate per kilometre. The rate is seeded once, on a fresh
-    # install, as its own activatable ``DynamicPricingVersion`` (Admin > Dynamic pricing), and is
-    # thereafter owned by the admin UI - it is never re-seeded or re-activated once any distance
-    # rate exists, so an operator who retires or replaces it is not overridden on restart.
-    #: Seed the per-kilometre fallback rate on first start.
+
     auto_seed_distance_pricing: bool = True
-    #: Shillings per kilometre charged when no official destination price matches.
     default_distance_rate_per_km: Decimal = Decimal("150")
 
-    # ── RIMs dispatch point ──────────────────────────────────────────────────────
-    # The dispatch point is business data, not a deployment detail, so it is seeded from these
-    # values and then owned by the admin UI (Admin > Settings). They are overridable by
-    # environment so a deployment can be corrected without a code change, but the defaults are
-    # RIMs' real premises: Kenyatta Avenue, Naivasha, Nakuru County.
-    #: Display name, shown to customers and staff as the dispatch location.
+
     dispatch_name: str = "RIMs Supplies and Hardware — Kenyatta Avenue, Naivasha"
-    #: Coordinates of the RIMs premises, resolved from the address above via Nominatim
-    #: (Kenyatta Avenue, Boma/Viwandani ward, Naivasha). Overridable if RIMs moves.
+
     dispatch_latitude: float = -0.7256336
     dispatch_longitude: float = 36.4448417
 

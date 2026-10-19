@@ -15,12 +15,9 @@ from fastapi import Request
 
 from app.config import Settings, get_settings
 
-#: Endpoints that must not be brute-forced, mapped to a budget name.
 _AUTH_PATHS = ("/auth/login",)
 
-#: Endpoints that spend a third-party geocoding or routing call on every cache miss. They get
-#: a separate, tighter budget so one caller paging through locations cannot exhaust the
-#: provider quota (or the bill) behind the ordinary public API.
+
 _GEO_PATHS = ("/public/locations/", "/public/route")
 
 
