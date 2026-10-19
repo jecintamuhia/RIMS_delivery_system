@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useIdle } from "@/utils/useIdle";
 
 const SEEN_KEY = "rims.intro.seen";
 
@@ -45,4 +46,22 @@ export function useIntro(): { show: boolean; dismiss: () => void } {
       setShow(false);
     },
   };
+}
+
+/** Inactivity before the splash replays as an attract screen. */
+export const IDLE_SPLASH_MS = 4 * 60 * 1000;
+
+/**
+ * Replays the splash screens after the user has been inactive. Pass
+ * `enabled = false` to pause the countdown (e.g. while the first-visit opening
+ * is already on screen).
+ */
+export function useIdleSplash(enabled = true): {
+  visible: boolean;
+  dismiss: () => void;
+} {
+  const [visible, setVisible] = useState(false);
+  useIdle(IDLE_SPLASH_MS, () => setVisible(true), enabled && !visible);
+  const dismiss = useCallback(() => setVisible(false), []);
+  return { visible, dismiss };
 }

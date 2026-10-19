@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { CinematicIntro } from "@/components/intro/CinematicIntro";
-import { useIntro } from "@/components/intro/useIntro";
+import { useIdleSplash, useIntro } from "@/components/intro/useIntro";
 import { Brand } from "@/components/layout/Brand";
 import { env } from "@/config/env";
 import type { GeoLocation } from "@/types";
@@ -62,12 +62,16 @@ export function CustomerLayout() {
     null,
   );
 
-  // The opening belongs to the locate screen; the quote page is mid-task.
-  const introVisible = intro.show && location.pathname === "/";
+  // The opening owns the locate screen; the idle "attract" replay covers
+  // whichever customer screen is on display.
+  const sessionIntro = intro.show && location.pathname === "/";
+  const idle = useIdleSplash(!sessionIntro);
+  const introVisible = idle.visible || sessionIntro;
 
   const handleIntroDone = (picked?: GeoLocation) => {
     if (picked) setPendingLocation(picked);
     setSearchFocus((n) => n + 1);
+    idle.dismiss();
     intro.dismiss();
   };
 
