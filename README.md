@@ -81,8 +81,12 @@ docker compose --env-file .env.production -f docker-compose.prod.yml up -d --bui
 To host the frontend on Vercel and the API on a managed host instead of running both in
 Compose, use the split-host setup: Vercel serves the SPA and reverse-proxies `/api/*` to the
 API (keeping the session cookie first-party), and the API runs from `backend/Dockerfile` with a
-managed PostgreSQL database. See [DEPLOYMENT_VERCEL.md](DEPLOYMENT_VERCEL.md); `render.yaml` and
-`rims-delivery-ui/vercel.json` hold the host configuration.
+managed PostgreSQL database. See [DEPLOYMENT_VERCEL.md](DEPLOYMENT_VERCEL.md); `render.yaml`,
+`render.free.yaml` and `rims-delivery-ui/vercel.json` hold the host configuration. Production is
+live on the permanent KES 0/month setup (Render Free web service + Neon Free PostgreSQL); see
+[DEPLOYMENT_FREE.md](DEPLOYMENT_FREE.md). Use `scripts/backup-postgres.ps1`,
+`scripts/restore-postgres.ps1`, `scripts/check-db.ps1` and `scripts/verify-api.ps1` for backups,
+restores and live verification.
 
 ## Tests and checks
 

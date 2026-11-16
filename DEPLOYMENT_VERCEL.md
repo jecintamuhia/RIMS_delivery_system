@@ -4,19 +4,35 @@ Runbook for hosting the RIMs Delivery frontend on Vercel and the FastAPI backend
 host (Render), on the custom domain `rimssuppliesandhardware.co.ke`. It complements
 [DEPLOYMENT.md](DEPLOYMENT.md), which covers the self-hosted Docker Compose + Caddy path.
 
-## Status: what has and has not been verified
+## Status: verified production state
 
-Verified locally against the real code (see the end of this file for exact commands):
+The zero-cost cutover is complete. Verified against production on 2026-11-16:
 
-- Backend test suite, type checks and linter pass.
-- The production frontend build succeeds.
-- Alembic migrates a **fresh PostgreSQL** database to head and the app starts and answers
-  `/health` and `/ready` against it.
+- The frontend is live on `https://rims-delivery-ui.vercel.app` and on the custom domain, with
+  the `/api/*` proxy reaching the API.
+- The API is live on `https://api.rimssuppliesandhardware.co.ke` (Render Free, behind
+  Cloudflare). `/health` is `ok`; `/ready` reports database/cache/pricing `ok`, the active version
+  `RIMs Transport Costs`, and 78 destinations.
+- The database is Neon Free (`neondb`, PostgreSQL 18.7). All 16 tables, 61 indexes, 21 foreign
+  keys, both active pricing versions and the Alembic head (`e4a1d7c9b3f2`) were verified after
+  restore; per-table content hashes match the old Render database exactly.
+- A fixed quote (Olkaria) returns KES 5500 and a distance quote (Nairobi) returns 91.17 km x
+  KES 150 = KES 13676. Both are persisted.
+- A new live quote was found in Neon and absent from the old Render database, proving the cutover.
+  The quote survived a Render service restart.
+- CORS now passes for `https://rims-delivery-ui.vercel.app`: preflight returns HTTP 200 with the
+  correct origin, methods, headers and credentials; GET and POST also return the CORS headers.
+  The two custom-domain origins also pass.
+- The existing admin account authenticates: login returns 200 with an `HttpOnly` + `Secure`
+  session cookie, and `/auth/me` returns `role=admin` with a CSRF token. Credentials were read
+  from the Render environment in memory for the test and were not printed or stored.
+- Backend tests, type checks and linter pass locally.
 
-**Not** done, because it needs account access this repository cannot have: no Vercel/Render
-project has been created, nothing has been deployed, no DNS record has been changed, no TLS
-certificate has been issued, and no live API call has been made. Treat every "expected" value
-below as something to confirm in the provider dashboards, not as a finished result.
+The full zero-cost runbook, backup/restore procedure, limitations and rollback steps are in
+[DEPLOYMENT_FREE.md](DEPLOYMENT_FREE.md).
+
+The Render web service and the old Render database are both on the **Free** plan. The old database
+is kept until `2026-11-18T10:05:13Z` as a rollback copy and can then be deleted.
 
 ## Architecture
 
@@ -28,7 +44,7 @@ origin** as the site. Vercel serves the SPA and reverse-proxies the API paths to
 ```
 browser ─▶ https://rimssuppliesandhardware.co.ke        (Vercel: static SPA + proxy)
                  │  /api/*  ,  /health  ,  /ready   →   ▼
-        https://api.rimssuppliesandhardware.co.ke        (Render: FastAPI + PostgreSQL)
+        https://api.rimssuppliesandhardware.co.ke        (Render: FastAPI + Neon PostgreSQL)
 ```
 
 ## How frontend requests reach the backend (verified)
@@ -60,8 +76,10 @@ browser ─▶ https://rimssuppliesandhardware.co.ke        (Vercel: static SPA 
 
 ## Step 1 - Backend on Render
 
-`render.yaml` (repo root) defines the service and database. You can apply it as a Blueprint or
-create the resources by hand with the same settings.
+`render.yaml` (repo root) defines the legacy paid service + database. For a permanent KES 0/month
+deployment use `render.free.yaml` with an external Neon database; see
+[DEPLOYMENT_FREE.md](DEPLOYMENT_FREE.md). You can apply either as a Blueprint or create the
+resources by hand with the same settings.
 
 | Setting | Value |
 | --- | --- |
@@ -70,12 +88,13 @@ create the resources by hand with the same settings.
 | Docker build context | `backend` |
 | Start command | the image `CMD`: `alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}` |
 | Health check path | `/health` |
-| Database | Render PostgreSQL (managed), or any external Postgres |
+| Database | Neon Free (external, permanent) for the zero-cost target; Render PostgreSQL is paid and its free tier expires after 30 days |
 
-- **Provisioning (Blueprint):** Render → **New → Blueprint** → pick this repo → apply. It creates
-  `rims-postgres` and `rims-api`, prompts for the two `sync: false` secrets, then builds.
-- **Provisioning (manual):** create a PostgreSQL instance, then a Docker web service pointing at
-  `backend/Dockerfile` with build context `backend`, health check `/health`, and the variables in
+- **Provisioning (Free Blueprint):** ensure the repo has both `render.yaml` and
+  `render.free.yaml`; Render may ask which Blueprint file to use. `render.free.yaml` creates only
+  the Free web service and prompts for `DATABASE_URL` (Neon) plus the bootstrap admin values.
+- **Provisioning (manual):** create a Docker web service pointing at `backend/Dockerfile` with
+  build context `backend`, Free instance type, health check `/health`, and the variables in
   Step 3.
 - **Migrations** run automatically on every deploy (the container `CMD`). To run them manually,
   open the service **Shell** and run `alembic upgrade head`.
@@ -111,10 +130,10 @@ Set these in the Render dashboard (service → Environment). Annotated copy:
 | `SESSION_HTTPS_ONLY` | `true` | Required when `ENVIRONMENT=production`. |
 | `TRUST_FORWARDED_FOR` | `true` | Real client IPs for rate limiting behind the proxies. |
 | `CSRF_PROTECTION` | `true` | |
-| `DATABASE_URL` | Render **Internal Connection String** | `postgresql://…` is upgraded to asyncpg automatically. |
+| `DATABASE_URL` | Neon **direct** connection string (no `-pooler` host) | Production currently uses the direct URL **without a query string** because the deployed commit predates the new normalisation. Once the normalisation in `backend/app/db/urls.py` is committed and deployed, `sslmode` and `channel_binding` are translated automatically. Do not add libpq-only parameters before then. |
 | `SESSION_SECRET` | random ≥64 chars | Generate: `python -c "import secrets;print(secrets.token_urlsafe(48))"` |
 | `JWT_SECRET` | a different random ≥64 chars | |
-| `CORS_ORIGINS` | `https://rimssuppliesandhardware.co.ke,https://www.rimssuppliesandhardware.co.ke` | Safety net; requests are same-origin. |
+| `CORS_ORIGINS` | `https://rims-delivery-ui.vercel.app,https://rimssuppliesandhardware.co.ke,https://www.rimssuppliesandhardware.co.ke` | Safety net; requests are same-origin. The Vercel URL is required for direct cross-origin calls. |
 | `GEOCODING_PROVIDER` / `ROUTING_PROVIDER` | `osm` | Keyless public OSM; rate-limited. |
 | `PROVIDER_USER_AGENT` | `RIMsDeliveryPricing/1.0 (contact: <your operations email>)` | Required courtesy header; use a real address. |
 | `COUNTRY_CODE` | `ke` | |
@@ -190,12 +209,15 @@ Report a step as passing only once you have seen it. Note `/ready` reports
 - **Blueprint fails on `dockerfilePath`/`dockerContext`**: they are relative to the repo root -
   keep `./backend/...`.
 
-## Remaining blockers (must be resolved by an account holder)
+## Remaining cleanup items
 
-1. Vercel account + project import, and domain attachment.
-2. Render account + Blueprint apply (or manual service + database), plus the two secret values.
-3. DNS provider access to add the three records above.
-4. Confirmation of the domain's registrar/nameservers and any existing mail records.
+1. Delete Render `rims-postgres` after `2026-11-18T10:05:13Z` (or once the Neon deployment has
+   been stable). It is free and no longer serves production traffic; keep it only as a rollback
+   copy until then.
+2. Keep the Render `DATABASE_URL` query-free until a build containing the URL normalisation is
+   live. The service is configured to auto-deploy `main`; documentation/tooling updates do not
+   need a manual `render deploys create`.
+3. Add a Neon usage alert and keep periodic dumps. Neon Free retains only 6 hours of history.
 
 ## Local verification performed (reproducible)
 
@@ -213,7 +235,9 @@ $env:DATABASE_URL="postgresql://rims:check@127.0.0.1:55432/rims"
 ..\.venv\Scripts\python.exe -m alembic upgrade head
 ```
 
-Everything that can be prepared without account access is committed:
-`rims-delivery-ui/vercel.json`, `rims-delivery-ui/.nvmrc`, `render.yaml`,
-`backend/.env.production.example`, the `$PORT`-aware `backend/Dockerfile`, and the driver
-normalisation in `backend/app/db/urls.py`.
+Committed and deployed earlier: `rims-delivery-ui/vercel.json`, `rims-delivery-ui/.nvmrc`,
+`render.yaml`, `backend/.env.production.example`, and the `$PORT`-aware `backend/Dockerfile`.
+This commit adds `render.free.yaml`, `DEPLOYMENT_FREE.md`, the backup/restore/check/verify scripts
+in `scripts/`, and the Neon query-string normalisation in `backend/app/db/urls.py` with its tests.
+The production database URL remains query-free, so it works with either build. The service
+auto-deploys `main`; no manual deployment was triggered for these changes.

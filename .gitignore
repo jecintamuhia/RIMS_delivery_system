@@ -6,6 +6,10 @@
 backend/.env
 rims-delivery-ui/.env.local
 
+# Database dumps (never commit production data)
+backups/
+*.dump
+
 # Python
 __pycache__/
 *.py[cod]

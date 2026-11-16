@@ -20,3 +20,33 @@ from app.db.urls import normalize_database_url
 )
 def test_normalize_database_url(raw: str, expected: str) -> None:
     assert normalize_database_url(raw) == expected
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        # Neon's dashboard URL: libpq's sslmode and channel_binding are not asyncpg kwargs.
+        (
+            "postgresql://u:p@ep-x.eu-central-1.aws.neon.tech/rims"
+            "?sslmode=require&channel_binding=require",
+            "postgresql+asyncpg://u:p@ep-x.eu-central-1.aws.neon.tech/rims?ssl=require",
+        ),
+        # An explicit asyncpg ssl parameter wins over sslmode.
+        (
+            "postgresql://u:p@h/db?sslmode=disable&ssl=require",
+            "postgresql+asyncpg://u:p@h/db?ssl=require",
+        ),
+        # Supabase's pooler flag is meaningless to asyncpg and is removed.
+        (
+            "postgresql://u:p@h/db?pgbouncer=true",
+            "postgresql+asyncpg://u:p@h/db",
+        ),
+        # Unrelated options are preserved.
+        (
+            "postgresql://u:p@h/db?application_name=rims&sslmode=verify-full",
+            "postgresql+asyncpg://u:p@h/db?application_name=rims&ssl=verify-full",
+        ),
+    ],
+)
+def test_normalize_managed_provider_query(raw: str, expected: str) -> None:
+    assert normalize_database_url(raw) == expected

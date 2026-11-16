@@ -1,3 +1,10 @@
+# LEGACY PAID BLUEPRINT - DO NOT APPLY IF YOU WANT KES 0/MONTH.
+#
+# The plans below (starter + basic-256mb) are paid. The permanent zero-cost target is
+# render.free.yaml with an external Neon Free database. Keep this file only until the
+# existing paid resources have been migrated and deleted; applying it creates billable
+# services.
+#
 # Render Blueprint for the RIMs Delivery API.
 #
 # Deploys the FastAPI backend as a Docker web service plus a managed PostgreSQL
@@ -52,7 +59,7 @@ services:
       - key: PROVIDER_USER_AGENT
         value: "RIMsDeliveryPricing/1.0 (contact: operations@rimssuppliesandhardware.co.ke)"
       - key: CORS_ORIGINS
-        value: "https://rimssuppliesandhardware.co.ke,https://www.rimssuppliesandhardware.co.ke"
+        value: "https://rims-delivery-ui.vercel.app,https://rimssuppliesandhardware.co.ke,https://www.rimssuppliesandhardware.co.ke"
       - key: DATABASE_URL
         fromDatabase:
           name: rims-postgres

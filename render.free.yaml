@@ -1,0 +1,67 @@
+# Permanently-free Render blueprint for the RIMs Delivery API.
+#
+# This is the zero-recurring-cost target. It uses:
+#   * a Render Free web service (no card required, 512 MB RAM, 0.1 CPU, 750 instance
+#     hours/month, spins down after 15 minutes idle and takes ~1 minute to wake), and
+#   * an EXTERNAL Neon Free PostgreSQL database (no card required, permanent, 1 GB,
+#     scales to zero after 5 minutes idle, 100 CU-hours and 5 GB egress per month).
+#
+# It deliberately does NOT create a Render Postgres database: Render's free Postgres
+# expires 30 days after creation and is then deleted. Use Neon (or another permanent
+# free Postgres) and paste its connection string as DATABASE_URL.
+#
+# IMPORTANT: if the paid blueprint in render.yaml was already applied to this
+# workspace, applying this file removes the managed Render Postgres resource. Do not
+# apply it until the old database has been backed up and restored to Neon, and the
+# live /ready check is green against Neon. See DEPLOYMENT_FREE.md.
+
+services:
+  - type: web
+    name: rims-api
+    runtime: docker
+    region: frankfurt
+    plan: free
+    # Both paths are relative to the repo root (Render's rule), not to each other.
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: DOCS_ENABLED
+        value: "false"
+      - key: SESSION_HTTPS_ONLY
+        value: "true"
+      - key: TRUST_FORWARDED_FOR
+        value: "true"
+      - key: CSRF_PROTECTION
+        value: "true"
+      - key: COUNTRY_CODE
+        value: ke
+      - key: GEOCODING_PROVIDER
+        value: osm
+      - key: ROUTING_PROVIDER
+        value: osm
+      - key: PROVIDER_USER_AGENT
+        value: "RIMsDeliveryPricing/1.0 (contact: operations@rimssuppliesandhardware.co.ke)"
+      - key: CORS_ORIGINS
+        value: "https://rims-delivery-ui.vercel.app,https://rimssuppliesandhardware.co.ke,https://www.rimssuppliesandhardware.co.ke"
+      # Neon direct (non-pooler) connection string. The normalisation in
+      # backend/app/db/urls.py translates libpq sslmode/channel_binding options once
+      # that change is deployed. Until then, supply the URL without a query string
+      # so asyncpg negotiates TLS successfully against Neon.
+      - key: DATABASE_URL
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: JWT_SECRET
+        generateValue: true
+      - key: BOOTSTRAP_ADMIN_EMAIL
+        sync: false
+      - key: BOOTSTRAP_ADMIN_PASSWORD
+        sync: false
